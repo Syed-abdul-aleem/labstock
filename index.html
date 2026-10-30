@@ -199,9 +199,10 @@ pre.raw{background:#0f172a;color:#d1fae5;border-radius:11px;padding:14px;font-si
         <div class="hint">Jab lab store se strips / inventory uthaye, yahan entry karein — stock auto add ho jayega. Masalan: Glucose Strips 500 uthayein to yahan 500 likhein.</div>
         <div class="grid3">
           <div class="field"><label>Date</label><input type="date" id="inDate"></div>
-          <div class="field"><label>Item</label><select id="inItem"></select></div>
-          <div class="field"><label>Quantity</label><input type="number" id="inQty" min="1" placeholder="Masalan: 500"></div>
+          <div class="field"><label>Item</label><select id="inItem" onchange="updateInHint()"></select></div>
+          <div class="field"><label>Quantity</label><input type="number" id="inQty" min="1" placeholder="Masalan: 500" oninput="updateInHint()"></div>
         </div>
+        <div id="inPackHint" class="alertbox alert-green" style="display:none;margin-bottom:13px"></div>
         <div class="grid2">
           <div class="field"><label>Received By (kis ne liya)</label><input id="inBy" placeholder="Naam likhein"></div>
           <div class="field"><label>Note (Batch / Remarks)</label><input id="inNote" placeholder="Optional"></div>
@@ -331,9 +332,9 @@ pre.raw{background:#0f172a;color:#d1fae5;border-radius:11px;padding:14px;font-si
       </div>
       <div class="card" style="border-color:#fecaca">
         <h2 style="color:var(--red)">⚠️ Danger Zone</h2>
-        <div class="hint">Demo data saaf karke khali system se shuru karein, ya poora data delete karein. Ye action wapis nahi hota — pehle backup le lein.</div>
+        <div class="hint">Saare items aur entries saaf karke khali system karein, ya asal items list (stock 0) ke sath dobara shuru karein. Ye action wapis nahi hota — pehle backup le lein.</div>
         <div style="display:flex;gap:9px;flex-wrap:wrap">
-          <button class="btn btn-outline" onclick="clearToEmpty()">🧹 Demo Data Saaf — Khali System</button>
+          <button class="btn btn-outline" onclick="clearToEmpty()">🧹 Sab Saaf — Khali System</button>
           <button class="btn btn-red" onclick="resetAll()">🗑️ Sab Data Delete Karein</button>
         </div>
       </div>
@@ -367,6 +368,11 @@ pre.raw{background:#0f172a;color:#d1fae5;border-radius:11px;padding:14px;font-si
       <div class="field"><label>Minimum Level (alert)</label><input type="number" id="fMin" min="0" value="50"></div>
       <div class="field"><label>Expiry Date</label><input type="date" id="fExpiry"></div>
     </div>
+    <div class="grid2">
+      <div class="field"><label>Pack Size — 1 Set/Kit mein kitne Tests? (normal item = 1)</label><input type="number" id="fPackSize" min="1" value="1"></div>
+      <div class="field"><label>Pack ka naam</label><select id="fPackLabel"><option>Set</option><option>Kit</option><option>Box</option><option>Pack</option></select></div>
+    </div>
+    <div class="hint" style="font-size:12.5px;color:var(--muted);margin-bottom:10px">Masalan <b>Diluent + Lyse: 1 Set = 800 Tests</b> — Pack Size 800 rakhein, Stock In mein sirf Sets likhne se stock auto ×800 Tests ho jayega.</div>
     <div class="field"><label>PDF Keywords (comma se alag) — PDF mein test in naamon se milega</label><input id="fKeywords" placeholder="Masalan: glucose, rbs, fbs, sugar"></div>
     <div style="display:flex;gap:9px;justify-content:flex-end;margin-top:6px">
       <button class="btn btn-outline" onclick="closeItemModal()">Cancel</button>
@@ -379,7 +385,7 @@ pre.raw{background:#0f172a;color:#d1fae5;border-radius:11px;padding:14px;font-si
 
 <script>
 /* ================= DATA ================= */
-const DB_KEY='labstock_db_v1';
+const DB_KEY='labstock_db_v2';
 let DB=null;
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 function todayStr(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0')}
@@ -389,27 +395,23 @@ function load(){
   if(!DB||!DB.items){DB=seed();save()}
 }
 function seed(){
-  const t=todayStr();
+  /* Hospital ki asal items list (Aleem, 2026-10-30) — koi demo data nahi, stock 0 se shuru */
   const items=[
-    {id:uid()+'1',name:'Blood Glucose Test Strips',category:'Strips',unit:'Strips',stock:500,min:100,expiry:'',keywords:'glucose,rbs,fbs,blood sugar,sugar,glu'},
-    {id:uid()+'2',name:'Urine Test Strips (10 Para)',category:'Strips',unit:'Strips',stock:320,min:50,expiry:'',keywords:'urine,urinalysis,urine complete,urine dr'},
-    {id:uid()+'3',name:'Hemoglobin (HB) Strips',category:'Strips',unit:'Strips',stock:210,min:50,expiry:'',keywords:'hb,hemoglobin,haemoglobin'},
-    {id:uid()+'4',name:'Dengue NS1 Kit',category:'Kits',unit:'Kits',stock:85,min:20,expiry:'',keywords:'dengue,ns1'},
-    {id:uid()+'5',name:'Malaria (PV/PF) Kit',category:'Kits',unit:'Kits',stock:140,min:30,expiry:'',keywords:'malaria,mp,pv,pf'},
-    {id:uid()+'6',name:'HBsAg Kit',category:'Kits',unit:'Kits',stock:95,min:25,expiry:'',keywords:'hbsag,hepatitis b'},
-    {id:uid()+'7',name:'HCV Kit',category:'Kits',unit:'Kits',stock:110,min:25,expiry:'',keywords:'hcv,hepatitis c,anti hcv'},
-    {id:uid()+'8',name:'HIV Kit',category:'Kits',unit:'Kits',stock:60,min:20,expiry:'',keywords:'hiv,anti hiv'},
-    {id:uid()+'9',name:'Pregnancy (hCG) Strips',category:'Strips',unit:'Strips',stock:180,min:40,expiry:'',keywords:'hcg,pregnancy,upt,urine pregnancy'},
-    {id:uid()+'10',name:'Cholesterol Test Strips',category:'Strips',unit:'Strips',stock:45,min:50,expiry:'',keywords:'cholesterol,lipid'},
-    {id:uid()+'11',name:'Uric Acid Test Strips',category:'Strips',unit:'Strips',stock:130,min:40,expiry:'',keywords:'uric acid,uric'},
-    {id:uid()+'12',name:'Blood Grouping Reagents (Anti A/B/D)',category:'Reagents',unit:'Bottles',stock:12,min:3,expiry:'',keywords:'blood group,grouping,anti a,anti b,anti d'}
+    {id:uid()+'1',name:'HBsAg',category:'Serology',unit:'Tests',stock:0,min:25,expiry:'',keywords:'hbsag,hbs ag,hepatitis b surface antigen,hepatitis b',packSize:1,packLabel:'Kit'},
+    {id:uid()+'2',name:'Anti HCV',category:'Serology',unit:'Tests',stock:0,min:25,expiry:'',keywords:'anti hcv,hcv,hepatitis c',packSize:1,packLabel:'Kit'},
+    {id:uid()+'3',name:'Anti HIV',category:'Serology',unit:'Tests',stock:0,min:25,expiry:'',keywords:'anti hiv,hiv',packSize:1,packLabel:'Kit'},
+    {id:uid()+'4',name:'Trop I',category:'Serology',unit:'Tests',stock:0,min:10,expiry:'',keywords:'trop i,troponin i,troponin,trop-i,ctni',packSize:1,packLabel:'Kit'},
+    {id:uid()+'5',name:'Malaria Parasite',category:'Parasitology',unit:'Tests',stock:0,min:25,expiry:'',keywords:'malaria parasite,malaria,mp',packSize:1,packLabel:'Kit'},
+    {id:uid()+'6',name:'Typhidot',category:'Serology',unit:'Tests',stock:0,min:20,expiry:'',keywords:'typhidot,typhi dot,typhoid',packSize:1,packLabel:'Kit'},
+    {id:uid()+'7',name:'H. Pylori',category:'Serology',unit:'Tests',stock:0,min:20,expiry:'',keywords:'h. pylori,h pylori,helicobacter pylori,helicobacter',packSize:1,packLabel:'Kit'},
+    {id:uid()+'8',name:'Blood Sugar',category:'Biochemistry',unit:'Tests',stock:0,min:50,expiry:'',keywords:'blood sugar,rbs,fbs,sugar,glucose',packSize:1,packLabel:'Kit'},
+    {id:uid()+'9',name:'Blood Urea',category:'Biochemistry',unit:'Tests',stock:0,min:50,expiry:'',keywords:'blood urea,urea,bun',packSize:1,packLabel:'Kit'},
+    {id:uid()+'10',name:'Serum Creatinine',category:'Biochemistry',unit:'Tests',stock:0,min:50,expiry:'',keywords:'serum creatinine,creatinine,s. creatinine',packSize:1,packLabel:'Kit'},
+    {id:uid()+'11',name:'Serum ALT',category:'Biochemistry',unit:'Tests',stock:0,min:50,expiry:'',keywords:'serum alt,alt,sgpt',packSize:1,packLabel:'Kit'},
+    {id:uid()+'12',name:'Serum Electrolytes',category:'Biochemistry',unit:'Tests',stock:0,min:30,expiry:'',keywords:'serum electrolytes,electrolytes,electrolyte,sodium,potassium',packSize:1,packLabel:'Kit'},
+    {id:uid()+'13',name:'Diluent + Lyse',category:'Hematology Reagent',unit:'Tests',stock:0,min:200,expiry:'',keywords:'cbc,complete blood count,diluent,lyse',packSize:800,packLabel:'Set'}
   ];
-  const tx=[
-    {id:uid()+'a',date:t,type:'in',itemId:items[0].id,itemName:items[0].name,qty:500,by:'Store',note:'Monthly issue — demo',source:'manual',time:'09:15'},
-    {id:uid()+'b',date:t,type:'in',itemId:items[1].id,itemName:items[1].name,qty:320,by:'Store',note:'Monthly issue — demo',source:'manual',time:'09:15'},
-    {id:uid()+'c',date:t,type:'out',itemId:items[0].id,itemName:items[0].name,qty:0,by:'',note:'',source:'manual',time:''}
-  ].filter(x=>x.qty>0);
-  return {items:items,transactions:tx,settings:{hospital:'Hospital Laboratory — Store Inventory',defaultBy:''},demo:true};
+  return {items:items,transactions:[],settings:{hospital:'Hospital Laboratory — Store Inventory',defaultBy:''},demo:false};
 }
 /* ================= HELPERS ================= */
 function $(id){return document.getElementById(id)}
@@ -453,13 +455,14 @@ function renderDashboard(){
 function renderInventory(){
   const q=($('invSearch').value||'').toLowerCase();
   const rows=DB.items.filter(i=>i.name.toLowerCase().includes(q)||(i.category||'').toLowerCase().includes(q));
-  $('invBody').innerHTML=rows.map(it=>{const[s,c]=statusOf(it);return '<tr><td><b>'+esc(it.name)+'</b><div style="font-size:12px;color:var(--muted)">'+esc(it.keywords||'')+'</div></td><td>'+esc(it.category)+'</td><td>'+esc(it.unit)+'</td><td class="stocknum">'+fmt(it.stock)+'</td><td>'+fmt(it.min)+'</td><td>'+(it.expiry||'—')+'</td><td><span class="pill '+c+'">'+s+'</span></td><td style="white-space:nowrap"><button class="iconbtn" onclick="openItemModal(\''+it.id+'\')">✏️ Edit</button> <button class="iconbtn danger" onclick="deleteItem(\''+it.id+'\')">🗑️</button></td></tr>'}).join('');
+  $('invBody').innerHTML=rows.map(it=>{const[s,c]=statusOf(it);const pack=Number(it.packSize)||1;const packInfo=pack>1?'<div style="font-size:12px;color:var(--teal);font-weight:600">1 '+(esc(it.packLabel||'Set'))+' = '+fmt(pack)+' Tests · Stock ≈ '+parseFloat((it.stock/pack).toFixed(2))+' '+(esc(it.packLabel||'Set'))+'s</div>':'';return '<tr><td><b>'+esc(it.name)+'</b><div style="font-size:12px;color:var(--muted)">'+esc(it.keywords||'')+'</div></td><td>'+esc(it.category)+'</td><td>'+esc(it.unit)+'</td><td class="stocknum">'+fmt(it.stock)+packInfo+'</td><td>'+fmt(it.min)+'</td><td>'+(it.expiry||'—')+'</td><td><span class="pill '+c+'">'+s+'</span></td><td style="white-space:nowrap"><button class="iconbtn" onclick="openItemModal(\''+it.id+'\')">✏️ Edit</button> <button class="iconbtn danger" onclick="deleteItem(\''+it.id+'\')">🗑️</button></td></tr>'}).join('');
   $('invEmpty').style.display=rows.length?'none':'block';
 }
 function fillItemSelects(){
   const opts=DB.items.map(i=>'<option value="'+i.id+'">'+esc(i.name)+' (Stock: '+fmt(i.stock)+' '+esc(i.unit)+')</option>').join('');
   $('inItem').innerHTML=opts||'<option value="">Pehle item add karein</option>';
   document.querySelectorAll('.use-item').forEach(sel=>{const v=sel.value;sel.innerHTML=opts;if(v)sel.value=v});
+  if(typeof updateInHint==='function')updateInHint();
 }
 function renderRecent(){
   const ins=DB.transactions.filter(x=>x.type==='in').slice(-8).reverse();
@@ -480,13 +483,14 @@ function openItemModal(id){
   $('fItemId').value=it?it.id:'';$('fName').value=it?it.name:'';$('fCategory').value=it?it.category:'Strips';
   $('fUnit').value=it?it.unit:'Strips';$('fStock').value=it?it.stock:0;$('fMin').value=it?it.min:50;
   $('fExpiry').value=it?(it.expiry||''):'';$('fKeywords').value=it?(it.keywords||''):'';
+  $('fPackSize').value=it?(it.packSize||1):1;$('fPackLabel').value=it?(it.packLabel||'Set'):'Set';
   $('itemModal').classList.add('show');
 }
 function closeItemModal(){$('itemModal').classList.remove('show')}
 function saveItem(){
   const name=$('fName').value.trim();if(!name){toast('⚠️ Item ka naam zaroor likhein');return}
   const id=$('fItemId').value;
-  const data={name:name,category:$('fCategory').value.trim()||'Other',unit:$('fUnit').value,stock:Math.max(0,Number($('fStock').value)||0),min:Math.max(0,Number($('fMin').value)||0),expiry:$('fExpiry').value,keywords:$('fKeywords').value.trim().toLowerCase()};
+  const data={name:name,category:$('fCategory').value.trim()||'Other',unit:$('fUnit').value,stock:Math.max(0,Number($('fStock').value)||0),min:Math.max(0,Number($('fMin').value)||0),expiry:$('fExpiry').value,keywords:$('fKeywords').value.trim().toLowerCase(),packSize:Math.max(1,Number($('fPackSize').value)||1),packLabel:$('fPackLabel').value};
   if(id){Object.assign(itemById(id),data);DB.transactions.forEach(x=>{if(x.itemId===id)x.itemName=name});toast('✅ Item update ho gaya')}
   else{DB.items.push(Object.assign({id:uid()},data));toast('✅ Naya item add ho gaya: '+name)}
   DB.demo=false;save();closeItemModal();renderAll();
@@ -497,13 +501,24 @@ function deleteItem(id){
   DB.items=DB.items.filter(i=>i.id!==id);save();renderAll();toast('🗑️ Item delete ho gaya');
 }
 /* ================= STOCK IN ================= */
+function updateInHint(){
+  const it=itemById($('inItem').value);const box=$('inPackHint');if(!box)return;
+  if(it&&(Number(it.packSize)||1)>1){
+    const q=Number($('inQty').value)||0;
+    box.style.display='block';
+    box.innerHTML='🧮 <b>'+esc(it.name)+': 1 '+esc(it.packLabel||'Set')+' = '+fmt(it.packSize)+' Tests.</b> Quantity mein <b>'+esc(it.packLabel||'Set')+'s</b> ki tadaad likhein — stock auto multiply hoga.'+(q>0?'<br>Abhi: <b>'+fmt(q)+' '+esc(it.packLabel||'Set')+' × '+fmt(it.packSize)+' = '+fmt(q*it.packSize)+' Tests</b> stock mein add hongay.':'');
+  }else{box.style.display='none'}
+}
 function addStockIn(){
   const itemId=$('inItem').value;const qty=Number($('inQty').value);const date=$('inDate').value||todayStr();
   if(!itemId){toast('⚠️ Pehle Inventory mein item add karein');return}
   if(!qty||qty<=0){toast('⚠️ Sahi quantity likhein');return}
-  const it=itemById(itemId);it.stock+=qty;
-  DB.transactions.push({id:uid(),date:date,type:'in',itemId:itemId,itemName:it.name,qty:qty,by:$('inBy').value.trim()||DB.settings.defaultBy||'',note:$('inNote').value.trim(),source:'manual',time:new Date().toTimeString().slice(0,5)});
-  DB.demo=false;save();$('inQty').value='';$('inNote').value='';renderAll();toast('✅ '+it.name+' — '+fmt(qty)+' '+it.unit+' stock mein add. Naya stock: '+fmt(it.stock));
+  const it=itemById(itemId);const pack=Number(it.packSize)||1;const addQty=qty*pack;
+  it.stock+=addQty;
+  const convNote=pack>1?(qty+' '+(it.packLabel||'Set')+' × '+pack+' = '+addQty+' Tests. '):'';
+  DB.transactions.push({id:uid(),date:date,type:'in',itemId:itemId,itemName:it.name,qty:addQty,by:$('inBy').value.trim()||DB.settings.defaultBy||'',note:convNote+$('inNote').value.trim(),source:'manual',time:new Date().toTimeString().slice(0,5)});
+  DB.demo=false;save();$('inQty').value='';$('inNote').value='';renderAll();
+  toast(pack>1?('✅ '+it.name+' — '+fmt(qty)+' '+(it.packLabel||'Set')+' × '+fmt(pack)+' = '+fmt(addQty)+' Tests add. Naya stock: '+fmt(it.stock)+' Tests'):('✅ '+it.name+' — '+fmt(qty)+' '+it.unit+' stock mein add. Naya stock: '+fmt(it.stock)));
 }
 /* ================= MANUAL USAGE ================= */
 function addUsageRow(){
@@ -563,16 +578,19 @@ function parsePDFText(text){
     let best=0,how='';
     keys.forEach(k=>{
       const escK=k.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+      /* Word-boundary matching: chhota keyword (mp, alt, hiv) kisi lafz ke andar match na ho */
+      const pre='(?<![a-z])',post='(?![a-z])';
       /* 1) Explicit qty: "RBS: 45" / "RBS - 45" / "RBS x 45" */
-      const expRe=new RegExp(escK+'\\s*(?:[:\\-=]|x\\s)([0-9]{1,5})','g');let m,expBest=0;
+      const expRe=new RegExp(pre+escK+'\\s*(?:[:\\-=]|x\\s)([0-9]{1,5})','g');let m,expBest=0;
       while((m=expRe.exec(lower))!==null){const v=Number(m[1]);if(v>expBest&&v<=100000)expBest=v}
       if(expBest>best){best=expBest;how='number'}
       /* 2) Keyword kitni dafa aya — list wali PDF mein har test ek line hota hai */
-      const occ=lower.split(k).length-1;
+      const occM=lower.match(new RegExp(pre+escK+post,'g'));const occ=occM?occM.length:0;
       if(occ>=2&&occ>best){best=occ;how='count'}
       /* 3) Sirf ek dafa aya aur sath number hai: "RBS 45" / "HBsAg performed 8" */
       if(occ===1&&!best){
-        const idx=lower.indexOf(k);const after=lower.slice(idx+k.length,idx+k.length+25);
+        const sm=lower.match(new RegExp(pre+escK+post));const idx=sm?sm.index:-1;
+        const after=idx>=0?lower.slice(idx+k.length,idx+k.length+25):'';
         const nm=after.match(/\b([0-9]{1,5})\b/);
         if(nm){best=Number(nm[1]);how='number'}else{best=1;how='count'}
       }
@@ -630,8 +648,8 @@ function importBackup(file){
   r.onload=()=>{try{const d=JSON.parse(r.result);if(!d.items||!d.transactions)throw 0;DB=d;save();renderAll();toast('✅ Backup restore ho gaya — '+DB.items.length+' items, '+DB.transactions.length+' entries')}catch(e){toast('❌ Ye sahi backup file nahi hai')}};
   r.readAsText(file);
 }
-function clearToEmpty(){if(!confirm('Demo items aur entries saaf karke bilkul khali system? (Backup pehle le lein)'))return;DB.items=[];DB.transactions=[];DB.demo=false;save();renderAll();toast('🧹 System khali ho gaya — apne items add karein')}
-function resetAll(){if(!confirm('SAB data delete ho jayega. Pakka?'))return;localStorage.removeItem(DB_KEY);DB=seed();save();renderAll();toast('Demo data dobara load ho gaya')}
+function clearToEmpty(){if(!confirm('Saare items aur entries saaf karke bilkul khali system? (Backup pehle le lein)'))return;DB.items=[];DB.transactions=[];DB.demo=false;save();renderAll();toast('🧹 System khali ho gaya — apne items add karein')}
+function resetAll(){if(!confirm('SAB data delete ho jayega aur asal items list stock 0 ke sath dobara load hogi. Pakka?'))return;localStorage.removeItem(DB_KEY);DB=seed();save();renderAll();toast('✅ Asal items list dobara load ho gayi (stock 0)')}
 /* ================= PWA INSTALL ================= */
 let deferredPrompt=null;
 window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredPrompt=e;$('installBtn').style.display='inline-flex'});
